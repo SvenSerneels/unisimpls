@@ -64,6 +64,8 @@ References
     scale = "none"
     copy::Bool = true
     all_components = true
+    return_uncertainty = true
+    store_jacobians = true
     X_Types_Accept = [DataFrame,Array{Number,2},Array{Float64,2},
                     Array{Float32,2},Array{Int32,2},Array{Int64,2},
                     Array{Union{Missing, Float64},2}]
@@ -99,6 +101,9 @@ References
     y_sca_ = nothing
     x_names = nothing
     y_name = nothing
+    dbds_ = nothing
+    dbdy_ = nothing
+    dbdX_ = nothing
 end
 
 function SIMPLS(n_components;kwargs...)
@@ -214,6 +219,19 @@ function fit!(self::SIMPLS,X,y)
     P,RR,R,T,V,VV,B,allB = _fit_simpls(self.n_components,n,p,Xs,ys,s,self.all_components,self.verbose)
     colret = Xnames
 
+    if self.return_uncertainty
+        if self.verbose
+            print("Calculating Jacobians")
+        end
+        dbds = _fit_dbds(self.n_components,n,p,Xs,s,P,R,RR,T,VV,allB)
+        dbdy = dbds * Xs'
+        if self.store_jacobians
+            setfield!(self,:dbds_, dbds)
+            setfield!(self,:dbdy_, dbdy)
+            setfield!(self,:dbdX_, dbds * kron(Diagonal(I,p),ys'))
+        end
+    end
+
     if self.all_components
         B_rescaled = (sy./sX)' .* allB
     else
@@ -252,8 +270,6 @@ function fit!(self::SIMPLS,X,y)
     setfield!(self,:coef_scaled_,B)
     setfield!(self,:intercept_,intercept)
     setfield!(self,:all_intercepts_,allintercept)
-    # setfield!(self,:x_ev_,Xev)
-    # setfield!(self,:y_ev_,yev)
     setfield!(self,:fitted_,yfit)
     setfield!(self,:all_fits_,allfit)
     setfield!(self,:residuals_,r)

@@ -66,6 +66,7 @@ References
     all_components = true
     return_uncertainty = true
     store_jacobians = true
+    significance = .05
     X_Types_Accept = [DataFrame,Array{Number,2},Array{Float64,2},
                     Array{Float32,2},Array{Int32,2},Array{Int64,2},
                     Array{Union{Missing, Float64},2}]
@@ -86,6 +87,7 @@ References
     x_ev_ = nothing
     y_ev_ = nothing
     fitted_ = nothing
+    fit_pi_ = nothing
     all_fits_ = nothing
     all_fitted = nothing
     residuals_ = nothing
@@ -104,6 +106,7 @@ References
     dbds_ = nothing
     dbdy_ = nothing
     dbdX_ = nothing
+    varb_ = nothing
 end
 
 function SIMPLS(n_components;kwargs...)
@@ -241,14 +244,22 @@ function fit!(self::SIMPLS,X,y)
     yp_rescaled = X0*B_rescaled
     # end
 
-    if self.centre != "none"
-        intercept = mapslices(self.centre,y .- yp_rescaled,dims=1)
+    if self.all_components
+        if self.centre == "none"
+            intercept = zeros(1,self.n_components)
+        else
+            intercept = mapslices(self.centre,y .- yp_rescaled,dims=1)
+        end
+    elseif self.centre == "none"
+        intercept = 0
     else
         intercept = mean(y .- yp_rescaled)
     end
 
     yfit = yp_rescaled .+ intercept
     r = y .- yfit
+    σ = std(r)
+    σₓ = std(Xs .- T*P')
     if self.all_components
         allfit = yfit
         yfit = yfit[:,self.n_components]
@@ -259,6 +270,20 @@ function fit!(self::SIMPLS,X,y)
         allintercept = intercept
         intercept = intercept[:,self.n_components]
     end
+
+    if self.return_uncertainty
+        varb = σ^2*dbdy*dbdy'
+        factor = Diagonal(kron(Diagonal(I,p),ys')*(kron(Diagonal(I,p),ys')'))
+        varb += σₓ*Diagonal(sX[1,:].^-2)*(dbds*factor*dbds')
+        varb = Diagonal(varb)
+        print(varb)
+        setfield!(self,:varb_,varb)
+        uncy = sqrt.(diag(1/n*Xs*varb*Xs'))
+        uncy *= quantile.(Normal(),1-self.significance/2)
+        yfitpi = hcat(yfit .- uncy, yfit .+ uncy)
+        setfield!(self,:fit_pi_,yfitpi)
+    end
+
     setfield!(self,:x_Rweights_,R)
     setfield!(self,:x_Rweights_unscaled_,RR)
     setfield!(self,:x_loadings_,P)
@@ -315,12 +340,35 @@ end
 function predict(self::SIMPLS,Xn)
 
     Xn, nxn, pxn = _predict_check(self,Xn)
-    if self.kernel
-        Xn = _new_kernel_transform(self,Xn,nxn,pxn)
-    end
     (n,p) = size(Xn)
     @assert p==length(self.coef_) "New data must have same number of columns as the ones the model has been trained with"
     return(Xn * self.coef_ .+ self.intercept_[:,1])
+
+end
+
+@doc """
+
+    Prediction interval for predicted responses
+    Inputs
+        SIMPLS object
+        Xn, new data of consistent dimensions (1 or more rows)
+        siginificance, optional, significance level at which to
+            construct prediction interval, if different from the one specified
+            in SIMPLS object
+    """ ->
+function predint(self::SIMPLS,Xn,significance=nothing)
+
+    if significance == nothing
+        significance = self.significance
+    end
+    Xn, nxn, pxn = _predict_check(self,Xn)
+    n,p = size(Xn)
+    n₀ = length(self.fitted_)
+    @assert p==length(self.coef_) "New data must have same number of columns as the ones the model has been trained with"
+    yp = Xn * self.coef_ .+ self.intercept_[:,1]
+    uncy = diag(sqrt.(1/n₀*Xn*self.varb_*Xn'))
+    uncy *= quantile.(Normal(),1-significance/2)
+    return hcat(yp .- uncy, yp .+ uncy)
 
 end
 
@@ -334,9 +382,6 @@ function predict_all(self::SIMPLS,Xn)
 
     @assert self.all_components "To predict full set of components, flag `all_components` needs to be `true`"
     Xn, nxn, pxn = _predict_check(self,Xn)
-    if self.kernel
-        Xn = _new_kernel_transform(self,Xn,nxn,pxn)
-    end
     (n,p) = size(Xn)
     @assert p==length(self.coef_) "New data must have same number of columns as the ones the model has been trained with"
     return((Xn * self.all_coeffs_ .+ self.all_intercepts_))
@@ -351,9 +396,6 @@ end
 function transform(self::SIMPLS,Xn)
 
     Xn, nxn, pxn = _predict_check(self,Xn)
-    if self.kernel
-        Xn = _new_kernel_transform(self,Xn,nxn,pxn)
-    end
     (n,p) = size(Xn)
     @assert p==length(self.coef_) "New data must have same number of columns as the ones the model has been trained with"
     Xnc = autoscale(Xn,self.x_loc_,self.x_sca_).X_as_

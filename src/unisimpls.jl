@@ -6,9 +6,10 @@ module unisimpls
     import ScikitLearn
     # include("_sreg_utils.jl")
     include("_preproc_utils.jl")
+    include("_predict_utils.jl")
     include("simpls.jl")
     include("unisimpls_algo.jl")
 
-    export SIMPLS, autoscale, set_params_dict!, predict_all
+    export SIMPLS, autoscale, set_params_dict!, predict_all, predint
 
 end

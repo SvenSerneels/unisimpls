@@ -106,7 +106,8 @@ References
     dbds_ = nothing
     dbdy_ = nothing
     dbdX_ = nothing
-    varb_ = nothing
+    varbs_ = nothing
+    uncys_ = nothing
 end
 
 function SIMPLS(n_components;kwargs...)
@@ -242,7 +243,6 @@ function fit!(self::SIMPLS,X,y)
     end
 
     yp_rescaled = X0*B_rescaled
-    # end
 
     if self.all_components
         if self.centre == "none"
@@ -258,8 +258,6 @@ function fit!(self::SIMPLS,X,y)
 
     yfit = yp_rescaled .+ intercept
     r = y .- yfit
-    σ = std(r)
-    σₓ = std(Xs .- T*P')
     if self.all_components
         allfit = yfit
         yfit = yfit[:,self.n_components]
@@ -272,15 +270,22 @@ function fit!(self::SIMPLS,X,y)
     end
 
     if self.return_uncertainty
+        if self.scale == "none"
+            @warn "Uncertainty calculations assume scaled data, results may be off"
+        end
+        r_scaled = ys .- Xs*B
+        σ = std(r_scaled)
+        σₓ = std(Xs .- T*P')
+        # varb for scaled inputs
         varb = σ^2*dbdy*dbdy'
         factor = Diagonal(kron(Diagonal(I,p),ys')*(kron(Diagonal(I,p),ys')'))
-        varb += σₓ*Diagonal(sX[1,:].^-2)*(dbds*factor*dbds')
+        varb += σₓ*(dbds*factor*dbds')
         varb = Diagonal(varb)
-        print(varb)
-        setfield!(self,:varb_,varb)
-        uncy = sqrt.(diag(1/n*Xs*varb*Xs'))
+        setfield!(self,:varbs_,varb)
+        uncy = sqrt.(diag(1/n*Xs*varb*Xs') .+ σₓ^2 * norm(B)^2)
         uncy *= quantile.(Normal(),1-self.significance/2)
-        yfitpi = hcat(yfit .- uncy, yfit .+ uncy)
+        yfitpi = hcat(yfit .- sy*uncy, yfit .+ sy*uncy)
+        setfield!(self,:uncys_,uncy)
         setfield!(self,:fit_pi_,yfitpi)
     end
 

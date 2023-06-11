@@ -229,10 +229,11 @@ function fit!(self::SIMPLS,X,y)
         end
         dbds = _fit_dbds(self.n_components,n,p,Xs,s,P,R,RR,T,VV,allB)
         dbdy = dbds * Xs'
+        dbdX = _fit_dbdX(self.n_components,n,p,Xs,ys,P,R,RR,T,VV,allB)
         if self.store_jacobians
             setfield!(self,:dbds_, dbds)
             setfield!(self,:dbdy_, dbdy)
-            setfield!(self,:dbdX_, dbds * kron(Diagonal(I,p),ys'))
+            setfield!(self,:dbdX_, dbdX)
         end
     end
 

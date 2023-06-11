@@ -67,7 +67,7 @@ function _fit_dbds(n_components,n,p,Xs,s,P,R,RR,T,V,B)
     """
     _fit_dbds
     the univariate SIMPLS Jacobian matrices with respect to
-    the vector of cross covariance
+    the vector of cross covariance with static predictor
     """
 
     n,p = size(Xs);
@@ -114,10 +114,6 @@ function _fit_dbds(n_components,n,p,Xs,s,P,R,RR,T,V,B)
             dphds = S*drhds
             ph=P[:,i]
 
-            # print("ph = " * string(ph) * "\n")
-            # print("vh = " * string(vh) * "\n")
-            # print("dphdy = " * string(dphds*Xs') * "\n")
-
             factor =  2*(ph'*vh*vh*vh')/((vh'*vh)^2)
             factor -= (ph'*vh*Diagonal(I,p)+kron(ph',vh))/(vh'*vh)
             dvhds = factor*dvhds
@@ -125,12 +121,85 @@ function _fit_dbds(n_components,n,p,Xs,s,P,R,RR,T,V,B)
 
             vh = V[:,i]
             b = B[:,i]
-            # print("dvhdy = " * string(dvhds*Xs') * "\n")
+
             dbhds += (kron(rh,s')+rh'*s*(Diagonal(I,p)))*drhds + rh*rh'
 
         end;
     end;
 
     return dbhds
+
+end;
+
+function _fit_dbdX(n_components,n,p,Xs,ys,P,R,RR,T,V,B)
+
+    """
+    _fit_dbdX
+    the univariate SIMPLS Jacobian matrices with respect to
+    the predictor data
+    """
+
+    n,p = size(Xs);
+
+    if n_components>min(n,p)
+        throw("Max # LV cannot exceed the rank of the data matrix")
+    end
+
+    S = Xs'*Xs;
+    s = Xs'*ys
+
+    ah = RR[:,1]
+    rh = R[:,1]
+    b = B[:,1]
+    dsdX = kron(Diagonal(I,p),ys')
+    if n_components > 1
+        vh = V[:,1]
+        ph = P[:,1]
+        dahdX = kron(Diagonal(I,p),ys')
+    end
+    dbhdX = zeros(p,n*p)
+    drhdX = zeros(p,n*p)
+    dphdX = zeros(p,n*p)
+    dvhdX = zeros(p,n*p)
+
+    for i=1:n_components
+
+        if i==1
+
+            drhdX = (Diagonal(I,p)/sqrt(ah'*S*ah))*dsdX
+            drhdX -= ah*ah'*Xs'*(Xs*dsdX .+ kron(ah',Diagonal(I,n)))/(sqrt(ah'*S*ah)^3)
+            dphdX = S*drhdX + kron(rh',Xs') + kron(Diagonal(I,p),rh'*Xs')
+            dvhdX = dphdX
+            dbhdX = (kron(rh,s')+rh'*s*(Diagonal(I,p)))*drhdX + rh*rh'*dsdX
+
+        else
+
+            dahdX -= vh*vh'/(vh'*vh)*dahdX
+            dahdX -= (ah'*vh*Diagonal(I,p)+kron(ah',vh))*dvhdX/(vh'*vh)
+            dahdX += 2*ah'*vh*vh*vh'/(vh'*vh)^2*dvhdX
+
+            ah = RR[:,i]
+            rh = R[:,i]
+
+            drhdX = dahdX/sqrt(ah'*S*ah)
+            drhdX -= ah*ah'*Xs'*(Xs*dahdX + kron(ah',Diagonal(I,n)))/(sqrt(ah'*S*ah)^3);
+
+            dphdX = S*drhdX + kron(rh',Xs') + kron(Diagonal(I,p),rh'*Xs')
+            ph=P[:,i]
+
+            factor =  2*(ph'*vh*vh*vh')/((vh'*vh)^2)
+            factor -= (ph'*vh*Diagonal(I,p)+kron(ph',vh))/(vh'*vh)
+            dvhdX = factor*dvhdX
+            dvhdX += dphdX - vh*vh'/(vh'*vh)*dphdX
+
+            vh = V[:,i]
+            b = B[:,i]
+
+            dbhdX += (kron(rh,s')+rh'*s*(Diagonal(I,p)))*drhdX + rh*rh'*dsdX
+
+        end;
+    end;
+
+    return dbhdX
 
 end;

@@ -1,6 +1,8 @@
-using spls
 using Test
+using unisimpls
 
-@testset "spls.jl" begin
-    # Write your tests here.
+@testset "unisimpls" begin
+    include("test_simpls.jl")
 end
+
+nothing

@@ -22,6 +22,15 @@ Parameters:
 `all_components`: bool. `true` will return a matrix B that contains all vectors
     of regression coefficients based on [0,1,...,n_components] components
 
+`return_uncertainty`: bool. If true, calculate and store variance of regression
+    coefficients, predicted responses and prediction intervals in the object.
+
+`store_jacobians`: bool. If true, store Jacobians of regression coefficients with
+    respect to input data (only relevant if return_uncertainty)
+
+`significance`, float, default .05. Significance level for a two-sided prediction
+    interval, e.g. 0.05 for 95% confidence. (only relevant if return_uncertainty)
+
 Values:
 -------
 The mutable struct called by SIMPLS() will be populated with model results, such
@@ -41,13 +50,29 @@ The module is consistent with the ScikitLearn API, e.g.
     gridsearch.best_params_
     ScikitLearn.predict(gridsearch.best_estimator_,Xt)
 
-Example of a SIMPLS call without kernel:
+Example of a plain SIMPLS call:
 
     simreg = unisimpls.SIMPLS()
     unisimpls.set_params_dict!(simreg,Dict(:n_components => 3, :all_components => true))
     fit!(simreg,X,y)
     simreg.x_weights_
     predict(simreg,Xn)
+
+Examples including prediction intervals:
+    simreg = unisimpls.SIMPLS()
+    unisimpls.set_params_dict!(simreg,Dict(:n_components => 3, :all_components => true,
+        return_uncertainty => true, :scale => "std"))
+    fit!(simreg,X,y)
+
+    # Jacobians
+    simreg.dbdy_
+    simreg.dbdX_
+
+    #Prediction intervals for training data
+    simreg.fit_pi_
+
+    # Prediction intervals for new cases
+    predint(simreg,Xn)
 
 Written by Sven Serneels.
 
@@ -108,6 +133,7 @@ References
     dbdX_ = nothing
     varbs_ = nothing
     uncys_ = nothing
+    _uncst = nothing
 end
 
 function SIMPLS(n_components;kwargs...)
@@ -231,7 +257,6 @@ function fit!(self::SIMPLS,X,y)
         dbdy = dbds * Xs'
         dbdX = _fit_dbdX(self.n_components,n,p,Xs,ys,P,R,RR,T,VV,allB)
         if self.store_jacobians
-            setfield!(self,:dbds_, dbds)
             setfield!(self,:dbdy_, dbdy)
             setfield!(self,:dbdX_, dbdX)
         end
@@ -279,11 +304,12 @@ function fit!(self::SIMPLS,X,y)
         σₓ = std(Xs .- T*P')
         # varb for scaled inputs
         varb = σ^2*dbdy*dbdy'
-        factor = Diagonal(kron(Diagonal(I,p),ys')*(kron(Diagonal(I,p),ys')'))
-        varb += σₓ*(dbds*factor*dbds')
+        varb += σₓ*(dbdX*dbdX')
         varb = Diagonal(varb)
         setfield!(self,:varbs_,varb)
-        uncy = sqrt.(diag(1/n*Xs*varb*Xs') .+ σₓ^2 * norm(B)^2)
+        uncconst = σₓ^2 * norm(B)^2
+        setfield!(self,:_uncst,uncconst)
+        uncy = sqrt.(diag(1/n*Xs*varb*Xs') .+ uncconst)
         uncy *= quantile.(Normal(),1-self.significance/2)
         yfitpi = hcat(yfit .- sy*uncy, yfit .+ sy*uncy)
         setfield!(self,:uncys_,uncy)
@@ -364,6 +390,10 @@ end
     """ ->
 function predint(self::SIMPLS,Xn,significance=nothing)
 
+    if self.scale == "none"
+        @warn "Uncertainty calculations assume scaled data, results may be off"
+    end
+
     if significance == nothing
         significance = self.significance
     end
@@ -371,10 +401,11 @@ function predint(self::SIMPLS,Xn,significance=nothing)
     n,p = size(Xn)
     n₀ = length(self.fitted_)
     @assert p==length(self.coef_) "New data must have same number of columns as the ones the model has been trained with"
+    Xs = autoscale(Matrix(Xn),self.x_loc_,self.x_sca_).X_as_
     yp = Xn * self.coef_ .+ self.intercept_[:,1]
-    uncy = diag(sqrt.(1/n₀*Xn*self.varb_*Xn'))
+    uncy = sqrt.(diag(1/n₀*Xs*self.varbs_*Xs') .+ self._uncst)
     uncy *= quantile.(Normal(),1-significance/2)
-    return hcat(yp .- uncy, yp .+ uncy)
+    return hcat(yp .- uncy*self.y_sca_, yp .+ uncy*self.y_sca_)
 
 end
 

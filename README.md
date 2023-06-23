@@ -1,5 +1,4 @@
 # `unisimpls`: A Julia Package for Univariate SIMPLS regression, Jacobians and prediction intervals
--------------------------------------------------------------------------------
 
 This package implements univariate SIMPLS regression. SIMPLS, a "statistically inspired modification to partial least squares" \[1\] is a computationally efficient PLS algorithm. The package contains an implementation adapted from MATLAB code by Sijmen de Jong.
 
@@ -21,6 +20,6 @@ References
 \[1\]. S. de Jong, SIMPLS: An alternative approach to partial least squares regression, Chemometrics and Intelligent Laboratory Systems, 18 (1993), 251-263.
 
 \[2\]  S. Serneels and P.J. Van Espen, Sample specific prediction intervals in SIMPLS, in: PLS and related methods, M. Vilares, M. Tenenhaus, P. Coelho, V. Esposito Vinzi and A. Morineau (eds.),DECISIA, Levallois Perret
-(France), 2003, pp. 219-233. [Pre-print available here.](https://github.com/SvenSerneels/unisimpls/blob/master/doc/PLS03_Preprint.pdf)
+(France), 2003, pp. 219-233. [Pre-print available here](https://github.com/SvenSerneels/unisimpls/blob/master/doc/PLS03_Preprint.pdf).
 
 \[3\] S. Serneels, P. Lemberge and P.J. Van Espen, Calculation of PLS prediction intervals using efficient recurrence relations for the Jacobian matrix, Journal of Chemometrics, 18 (2004), 76-80.

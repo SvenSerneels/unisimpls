@@ -1,8 +1,5 @@
 # `unisimpls`: A Julia Package for Univariate SIMPLS regression, Jacobians and prediction intervals
-==============================================================================
-
-The Package
------------
+-------------------------------------------------------------------------------
 
 This package implements univariate SIMPLS regression. SIMPLS, a "statistically inspired modification to partial least squares" \[1\] is a computationally efficient PLS algorithm. The package contains an implementation adapted from MATLAB code by Sijmen de Jong.
 
